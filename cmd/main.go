@@ -23,14 +23,16 @@ type Server struct {
 }
 
 func (server *Server) Process(srv extprocv3.ExternalProcessor_ProcessServer) error {
-	slog.Info("GRPC CALL RECEIVED AT EXT_PROC SERVICE") // Log this immediately
+	slog.Info("GRPC CALL RECEIVED AT EXT_PROC SERVICE")
 	ctx := srv.Context()
 	sendResponse := func(resp *extprocv3.ProcessingResponse) {
 		if err := srv.Send(resp); err != nil {
 			slog.Warn(fmt.Sprintf("send error %v", err))
 		}
 	}
+
 	handleCount := 0
+	mutate := false
 
 	for {
 		select {
@@ -53,6 +55,9 @@ func (server *Server) Process(srv extprocv3.ExternalProcessor_ProcessServer) err
 			for _, h := range value.RequestHeaders.GetHeaders().GetHeaders() {
 				if h.Key == "x-handle-count" {
 					handleCount, _ = strconv.Atoi(string(h.GetRawValue()))
+				}
+				if h.Key == "x-mutate" {
+					mutate = true
 				}
 			}
 			handleCount += 1
@@ -77,23 +82,28 @@ func (server *Server) Process(srv extprocv3.ExternalProcessor_ProcessServer) err
 			sendResponse(resp)
 			break
 		case *extprocv3.ProcessingRequest_RequestBody:
-			slog.Info(fmt.Sprintf("2) Got a request body %v\n", value))
+			slog.Info("2) Got a request body", "length", len(value.RequestBody.GetBody()))
 			slog.Info(fmt.Sprintf("Handle count is %d\n", handleCount))
 			body := []byte(fmt.Sprintf("handled: %d", handleCount))
 
-			headerMutation := &extprocv3.HeaderMutation{
-				SetHeaders: []*corev3.HeaderValueOption{
-					{Header: &corev3.HeaderValue{
-						Key:      "Content-Length",
-						RawValue: []byte(strconv.Itoa(len(body))),
-					}},
-				},
-			}
 			var bodyMutation *extprocv3.BodyMutation
+			var headerMutation *extprocv3.HeaderMutation
 			// Don't mutate in router ext proc
 			if handleCount > 1 {
-				bodyMutation = &extprocv3.BodyMutation{
-					Mutation: &extprocv3.BodyMutation_Body{Body: body},
+				if mutate {
+					bodyMutation = &extprocv3.BodyMutation{
+						Mutation: &extprocv3.BodyMutation_Body{Body: body},
+					}
+					headerMutation = &extprocv3.HeaderMutation{
+						SetHeaders: []*corev3.HeaderValueOption{
+							{Header: &corev3.HeaderValue{
+								Key:      "Content-Length",
+								RawValue: []byte(strconv.Itoa(len(body))),
+							}},
+						},
+					}
+				} else {
+					slog.Info("Skipping mutation")
 				}
 			}
 			resp := &extprocv3.ProcessingResponse{
@@ -119,20 +129,6 @@ func (server *Server) Process(srv extprocv3.ExternalProcessor_ProcessServer) err
 			slog.Info(fmt.Sprintf("4) Got a response body %v\n", value))
 			resp := &extprocv3.ProcessingResponse{
 				Response: &extprocv3.ProcessingResponse_ResponseBody{},
-			}
-			sendResponse(resp)
-			break
-		case *extprocv3.ProcessingRequest_RequestTrailers:
-			slog.Info(fmt.Sprintf("5) Got request trailers %v\n", value))
-			resp := &extprocv3.ProcessingResponse{
-				Response: &extprocv3.ProcessingResponse_RequestTrailers{},
-			}
-			sendResponse(resp)
-			break
-		case *extprocv3.ProcessingRequest_ResponseTrailers:
-			slog.Info(fmt.Sprintf("6) Got response trailers %v\n", value))
-			resp := &extprocv3.ProcessingResponse{
-				Response: &extprocv3.ProcessingResponse_ResponseTrailers{},
 			}
 			sendResponse(resp)
 			break
@@ -163,7 +159,7 @@ func main() {
 	if err != nil {
 		log.Fatal(fmt.Sprintf("Failed to listen on %s: %v", grpcAddress, err))
 	}
-	opts := []grpc.ServerOption{grpc.MaxConcurrentStreams(1000)}
+	opts := []grpc.ServerOption{grpc.MaxConcurrentStreams(1000), grpc.MaxRecvMsgSize(20 * 1024 * 1024)}
 	grpcServer := grpc.NewServer(opts...)
 	server := Server{}
 	extprocv3.RegisterExternalProcessorServer(grpcServer, &server)

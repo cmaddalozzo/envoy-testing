@@ -74,6 +74,7 @@ static_resources:
       cluster_name: service_echo
       endpoints:
       - lb_endpoints:
+        # PT1
         - endpoint:
             address:
               socket_address:
@@ -86,6 +87,7 @@ static_resources:
                 pt_only: "true"
         priority: 0
       - lb_endpoints:
+        # PT2
         - endpoint:
             address:
               socket_address:
@@ -98,6 +100,7 @@ static_resources:
                 pt_only: "true"
         priority: 1
       - lb_endpoints:
+        # OD1
         - endpoint:
             address:
               socket_address:
