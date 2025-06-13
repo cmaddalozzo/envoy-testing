@@ -1,0 +1,27 @@
+{
+  "id": "chatcmpl-8f258658-2e0e-4ffa-907f-769ea41056d7",
+  "object": "chat.completion",
+  "created": 1748873590,
+  "model": "dsp.llama-3.1-70b-instruct",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "reasoning_content": null,
+        "content": "I'm not aware of a specific function to call from the library, but I can answer your question directly. \n\nThe capital of France is Paris.",
+        "tool_calls": []
+      },
+      "logprobs": null,
+      "finish_reason": "stop",
+      "stop_reason": null
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 103,
+    "total_tokens": 134,
+    "completion_tokens": 31,
+    "prompt_tokens_details": null
+  },
+  "prompt_logprobs": null
+}
